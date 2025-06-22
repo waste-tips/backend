@@ -1,7 +1,11 @@
 package container
 
 import (
+	"backend/internal/domain/handlers"
+	"backend/internal/domain/services"
 	"backend/internal/infrastructure/config"
+	"backend/internal/infrastructure/localization"
+	"backend/internal/infrastructure/recaptcha"
 	"backend/libs/logger"
 	"backend/libs/tracer"
 	"context"
@@ -11,10 +15,14 @@ import (
 
 // Container holds all application dependencies
 type Container struct {
-	Config *config.Config
-	Logger *logger.Log
-	Tracer *tracer.Tracer
-	Ai     *genai.Client
+	Config             *config.Config
+	Logger             *logger.Log
+	Tracer             *tracer.Tracer
+	Ai                 *genai.Client
+	Localizer          *localization.Localizer
+	RecaptchaService   *recaptcha.Service
+	WasteSortingService *services.WasteSortingService
+	WasteSortingHandler *handlers.WasteSortingHandler
 }
 
 // NewContainer creates and initializes the dependency injection container
@@ -52,10 +60,26 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
+	// Initialize localizer
+	localizer := localization.NewLocalizer()
+
+	// Initialize reCAPTCHA service
+	recaptchaService := recaptcha.NewService()
+
+	// Initialize waste sorting service
+	wasteSortingService := services.NewWasteSortingService(geminiClient, localizer, recaptchaService)
+
+	// Initialize waste sorting handler
+	wasteSortingHandler := handlers.NewWasteSortingHandler(wasteSortingService, localizer)
+
 	return &Container{
-		Config: cfg,
-		Logger: l,
-		Tracer: tr,
-		Ai:     geminiClient,
+		Config:              cfg,
+		Logger:              l,
+		Tracer:              tr,
+		Ai:                  geminiClient,
+		Localizer:           localizer,
+		RecaptchaService:    recaptchaService,
+		WasteSortingService: wasteSortingService,
+		WasteSortingHandler: wasteSortingHandler,
 	}, nil
 }

@@ -4,7 +4,6 @@ import (
 	"backend/internal/infrastructure/container"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -15,6 +14,7 @@ func Invoke(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+	
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -47,21 +47,44 @@ func Invoke(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(spanCtx)
 
 	switch {
-	case r.Method == http.MethodPost && strings.Contains(r.Header.Get("Content-Type"), "application/json"):
-		// Check if it's a Telegram webhook
-		body, err := io.ReadAll(r.Body)
+	case r.Method == http.MethodPost && strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data"):
+		// Handle waste sorting request
+		appContainer.Logger.Info(spanCtx, map[string]interface{}{
+			"message": "Processing waste sorting request",
+			"method":  r.Method,
+			"path":    r.URL.Path,
+		})
+
+		response, err := appContainer.WasteSortingHandler.HandleRequest(spanCtx, r)
 		if err != nil {
 			appContainer.Logger.Error(spanCtx, map[string]interface{}{
-				"message": "Failed to read request body",
+				"message": "Failed to process waste sorting request",
 				"error":   err.Error(),
 			})
-			http.Error(w, "Failed to read request body", http.StatusBadRequest)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		// Here should be reCaptcha validator Gemini request and response handling
+		// Determine status code based on response
+		statusCode := http.StatusOK
+		if !response.Success {
+			statusCode = http.StatusBadRequest
+		}
+
+		appContainer.WasteSortingHandler.WriteJSONResponse(w, response, statusCode)
+
+		appContainer.Logger.Info(spanCtx, map[string]interface{}{
+			"message":     "Waste sorting request processed successfully",
+			"success":     response.Success,
+			"status_code": statusCode,
+		})
 
 	default:
+		appContainer.Logger.Warning(spanCtx, map[string]interface{}{
+			"message":      "Unsupported request",
+			"method":       r.Method,
+			"content_type": r.Header.Get("Content-Type"),
+		})
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
 }
