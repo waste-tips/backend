@@ -126,11 +126,12 @@ func (s *WasteSortingService) processImageWithGemini(ctx context.Context, file m
 	mimeType := http.DetectContentType(imageData)
 
 	// Create prompt based on language
-	prompt := fmt.Sprintf(`Analyze this waste/garbage image and provide waste sorting instructions on Language %s for Germany, postal code %s. 
-Identify what type of waste this is and explain which bin it should go into (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, Glass container, etc.).
-Include specific local regulations for postal code %s if relevant.
-Provide your response ONLY as valid HTML without any additional text, markdown, or explanations. 
-Use proper HTML structure with headings, paragraphs, and lists where appropriate.`, language, postalCode, postalCode)
+	prompt := fmt.Sprintf(`Analyze this waste/garbage image and provide waste sorting instructions on Language %s for Germany, postal code %s.
+	Identify what type of waste this is and explain which bin it should go into (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, Glass container, etc.).
+	Provide detailed instructions on how to sort this waste item, including any specific preparation steps (e.g., rinsing, removing labels).
+	Include specific local regulations for postal code %s if relevant.
+	Provide your response ONLY as valid HTML without any additional text, markdown, or explanations.
+	Use proper HTML structure with headings, paragraphs, and lists where appropriate.`, language, postalCode, postalCode)
 	contents := []*genai.Content{{
 		Parts: []*genai.Part{
 			{Text: prompt},
@@ -142,7 +143,11 @@ Use proper HTML structure with headings, paragraphs, and lists where appropriate
 		Role: genai.RoleUser,
 	}}
 
-	resp, err := s.aiClient.Models.GenerateContent(ctx, "gemini-2.0-flash", contents, nil)
+	resp, err := s.aiClient.Models.GenerateContent(ctx, "gemini-2.0-flash", contents, &genai.GenerateContentConfig{
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{{Text: "You are an expert in waste management and recycling regulations in Germany. You analyze waste items and provide detailed sorting instructions in the specified language. Your responses must be in valid HTML format only, without any additional text or markdown."}},
+		},
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %v", err)
 	}
