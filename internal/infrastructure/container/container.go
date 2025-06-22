@@ -1,26 +1,26 @@
 package container
 
 import (
-	"backend/internal/domain/handlers"
-	"backend/internal/domain/services"
-	"backend/internal/infrastructure/config"
-	"backend/internal/infrastructure/localization"
-	"backend/internal/infrastructure/recaptcha"
-	"backend/libs/logger"
-	"backend/libs/tracer"
 	"context"
 	"fmt"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/domain/handlers"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/domain/services"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/infrastructure/config"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/infrastructure/localization"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/infrastructure/recaptcha"
+	"github.com/DeryabinSergey/waste-tips-backend/libs/logger"
+	"github.com/DeryabinSergey/waste-tips-backend/libs/tracer"
 	"google.golang.org/genai"
 )
 
 // Container holds all application dependencies
 type Container struct {
-	Config             *config.Config
-	Logger             *logger.Log
-	Tracer             *tracer.Tracer
-	Ai                 *genai.Client
-	Localizer          *localization.Localizer
-	RecaptchaService   *recaptcha.Service
+	Config              *config.Config
+	Logger              *logger.Log
+	Tracer              *tracer.Tracer
+	Ai                  *genai.Client
+	Localizer           *localization.Localizer
+	RecaptchaService    *recaptcha.Service
 	WasteSortingService *services.WasteSortingService
 	WasteSortingHandler *handlers.WasteSortingHandler
 }
@@ -64,7 +64,7 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	localizer := localization.NewLocalizer()
 
 	// Initialize reCAPTCHA service
-	recaptchaService := recaptcha.NewService()
+	recaptchaService := recaptcha.NewService(cfg.ProjectID, cfg.RecaptchaSiteKey)
 
 	// Initialize waste sorting service
 	wasteSortingService := services.NewWasteSortingService(geminiClient, localizer, recaptchaService)

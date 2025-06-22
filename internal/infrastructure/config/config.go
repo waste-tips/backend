@@ -6,19 +6,21 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	ProjectID       string
-	ApplicationName string
-	GCPEnabled      bool
-	LogLevel        int
+	ProjectID        string
+	ApplicationName  string
+	RecaptchaSiteKey string
+	GCPEnabled       bool
+	LogLevel         int
 }
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
 	return &Config{
-		ProjectID:       getEnv("PROJECT_ID", "german-article-bot"),
-		ApplicationName: getEnv("APPLICATION_NAME", "article-bot"),
-		GCPEnabled:      getEnv("GCP_ENABLED", "true") == "true",
-		LogLevel:        100, // Default log level
+		ProjectID:        getEnv("PROJECT_ID", "waste-tips"),
+		ApplicationName:  getEnv("APPLICATION_NAME", "Waste Tips"),
+		RecaptchaSiteKey: getEnv("RECAPTCHA_SITE_KEY", ""),
+		GCPEnabled:       getEnv("GCP_ENABLED", "true") == "true",
+		LogLevel:         100, // Default log level
 	}
 }
 

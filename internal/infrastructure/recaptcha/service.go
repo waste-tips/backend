@@ -1,12 +1,10 @@
 package recaptcha
 
 import (
-	"context"
-	"fmt"
-	"os"
-
 	"cloud.google.com/go/recaptchaenterprise/v2/apiv1"
 	"cloud.google.com/go/recaptchaenterprise/v2/apiv1/recaptchaenterprisepb"
+	"context"
+	"fmt"
 )
 
 // Service handles reCAPTCHA Enterprise verification
@@ -16,10 +14,10 @@ type Service struct {
 }
 
 // NewService creates a new reCAPTCHA service
-func NewService() *Service {
+func NewService(projectId, siteKey string) *Service {
 	return &Service{
-		projectID: os.Getenv("GOOGLE_CLOUD_PROJECT"),
-		siteKey:   os.Getenv("RECAPTCHA_SITE_KEY"),
+		projectID: projectId,
+		siteKey:   siteKey,
 	}
 }
 

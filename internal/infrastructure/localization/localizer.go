@@ -230,9 +230,9 @@ func (l *Localizer) GetErrorMessage(language, messageType string) string {
 			return messages.MissingFields
 		}
 	}
-	
-	// Fallback to English
-	if messages, exists := l.errorMessages["en"]; exists {
+
+	// Fallback to German if the requested language is not available
+	if messages, exists := l.errorMessages["de"]; exists {
 		switch messageType {
 		case "invalid_postal_code":
 			return messages.InvalidPostalCode
@@ -246,6 +246,6 @@ func (l *Localizer) GetErrorMessage(language, messageType string) string {
 			return messages.MissingFields
 		}
 	}
-	
+
 	return "An error occurred"
 }

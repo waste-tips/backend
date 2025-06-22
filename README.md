@@ -74,6 +74,17 @@ The API supports 25 languages:
    - reCAPTCHA Enterprise API
    - Vertex AI API (for Gemini)
 
+```bash
+gcloud functions deploy backend-service \
+  --entry-point=Invoke \
+  --runtime go123 \
+  --gen2 \
+  --region=europe-west3 \
+  --trigger-http \
+  --set-secrets="RECAPTCHA_SITE_KEY=projects/519359753202/secrets/RECAPTCHA_SITE_KEY:latest" \
+  --allow-unauthenticated
+```
+
 ## Local Development
 
 ```bash

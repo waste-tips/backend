@@ -1,12 +1,13 @@
 package services
 
 import (
-	"backend/internal/domain/models"
-	"backend/internal/infrastructure/localization"
 	"context"
 	"fmt"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/domain/models"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/infrastructure/localization"
 	"io"
 	"mime/multipart"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -15,8 +16,8 @@ import (
 
 // WasteSortingService handles waste sorting business logic
 type WasteSortingService struct {
-	aiClient      *genai.Client
-	localization  *localization.Localizer
+	aiClient         *genai.Client
+	localization     *localization.Localizer
 	recaptchaService RecaptchaService
 }
 
@@ -83,10 +84,12 @@ func (s *WasteSortingService) isValidGermanPostalCode(postalCode string) bool {
 	if !matched {
 		return false
 	}
-	
+
 	// Convert to int for range check
 	code := 0
-	fmt.Sscanf(postalCode, "%d", &code)
+	if _, err := fmt.Sscanf(postalCode, "%d", &code); err != nil {
+		return false
+	}
 	return code >= 1001 && code <= 99998
 }
 
@@ -95,16 +98,16 @@ func (s *WasteSortingService) isValidImageFile(fileHeader *multipart.FileHeader)
 	if fileHeader == nil {
 		return false
 	}
-	
+
 	contentType := fileHeader.Header.Get("Content-Type")
 	validTypes := []string{
 		"image/jpeg",
-		"image/jpg", 
+		"image/jpg",
 		"image/png",
 		"image/gif",
 		"image/webp",
 	}
-	
+
 	for _, validType := range validTypes {
 		if contentType == validType {
 			return true
@@ -120,17 +123,26 @@ func (s *WasteSortingService) processImageWithGemini(ctx context.Context, file m
 	if err != nil {
 		return "", fmt.Errorf("failed to read image: %v", err)
 	}
+	mimeType := http.DetectContentType(imageData)
 
-	model := s.aiClient.GenerativeModel("gemini-1.5-flash")
-	
 	// Create prompt based on language
-	prompt := s.createPrompt(language, postalCode)
+	prompt := fmt.Sprintf(`Analyze this waste/garbage image and provide waste sorting instructions on Language %s for Germany, postal code %s. 
+Identify what type of waste this is and explain which bin it should go into (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, Glass container, etc.).
+Include specific local regulations for postal code %s if relevant.
+Provide your response ONLY as valid HTML without any additional text, markdown, or explanations. 
+Use proper HTML structure with headings, paragraphs, and lists where appropriate.`, language, postalCode, postalCode)
+	contents := []*genai.Content{{
+		Parts: []*genai.Part{
+			{Text: prompt},
+			{InlineData: &genai.Blob{
+				Data:     imageData,
+				MIMEType: mimeType,
+			}},
+		},
+		Role: genai.RoleUser,
+	}}
 
-	// Create image part
-	imagePart := genai.ImageData("image/jpeg", imageData)
-	
-	// Generate content
-	resp, err := model.GenerateContent(ctx, genai.Text(prompt), imagePart)
+	resp, err := s.aiClient.Models.GenerateContent(ctx, "gemini-2.0-flash", contents, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %v", err)
 	}
@@ -139,59 +151,37 @@ func (s *WasteSortingService) processImageWithGemini(ctx context.Context, file m
 		return "", fmt.Errorf("no response from Gemini")
 	}
 
-	// Extract text from response
-	var result strings.Builder
-	for _, part := range resp.Candidates[0].Content.Parts {
-		if text, ok := part.(genai.Text); ok {
-			result.WriteString(string(text))
+	for _, candidate := range resp.Candidates {
+		if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+			continue
 		}
+
+		var textResponse string
+		for _, part := range candidate.Content.Parts {
+			if part.Text != "" {
+				textResponse += part.Text
+			}
+		}
+
+		if textResponse == "" {
+			continue
+		}
+
+		re := regexp.MustCompile(`(?s)<body[^>]*>(.*?)</body>`)
+		match := re.FindStringSubmatch(textResponse)
+		if len(match) > 1 {
+			textResponse = match[1]
+		} else {
+			textResponse = ""
+		}
+
+		textResponse = strings.TrimSpace(textResponse)
+		if textResponse == "" {
+			continue
+		}
+
+		return textResponse, nil
 	}
 
-	return result.String(), nil
-}
-
-// createPrompt creates a localized prompt for Gemini AI
-func (s *WasteSortingService) createPrompt(language, postalCode string) string {
-	prompts := map[string]string{
-		"en": fmt.Sprintf(`Analyze this waste/garbage image and provide waste sorting instructions for Germany, postal code %s. 
-Identify what type of waste this is and explain which bin it should go into (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, Glass container, etc.).
-Include specific local regulations for postal code %s if relevant.
-Provide your response ONLY as valid HTML without any additional text, markdown, or explanations. 
-Use proper HTML structure with headings, paragraphs, and lists where appropriate.`, postalCode, postalCode),
-
-		"de": fmt.Sprintf(`Analysiere dieses Müll-/Abfallbild und gib Anweisungen zur Mülltrennung für Deutschland, Postleitzahl %s.
-Identifiziere, um welche Art von Abfall es sich handelt und erkläre, in welche Tonne er gehört (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, Glascontainer, etc.).
-Berücksichtige spezifische lokale Vorschriften für die Postleitzahl %s, falls relevant.
-Gib deine Antwort NUR als gültiges HTML ohne zusätzlichen Text, Markdown oder Erklärungen.
-Verwende eine ordnungsgemäße HTML-Struktur mit Überschriften, Absätzen und Listen, wo angemessen.`, postalCode, postalCode),
-
-		"ru": fmt.Sprintf(`Проанализируй это изображение мусора/отходов и предоставь инструкции по сортировке отходов для Германии, почтовый индекс %s.
-Определи, какой это тип отходов и объясни, в какой контейнер его следует поместить (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, стеклянный контейнер и т.д.).
-Включи специфические местные правила для почтового индекса %s, если это актуально.
-Предоставь свой ответ ТОЛЬКО в виде валидного HTML без дополнительного текста, markdown или объяснений.
-Используй правильную HTML структуру с заголовками, параграфами и списками где необходимо.`, postalCode, postalCode),
-
-		"tr": fmt.Sprintf(`Bu atık/çöp görüntüsünü analiz et ve Almanya, posta kodu %s için atık ayırma talimatları ver.
-Bu atığın ne tür olduğunu belirle ve hangi çöp kutusuna gitmesi gerektiğini açıkla (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, Cam konteyneri, vb.).
-Posta kodu %s için özel yerel düzenlemeler varsa dahil et.
-Yanıtını SADECE ek metin, markdown veya açıklama olmadan geçerli HTML olarak ver.
-Uygun olan yerlerde başlıklar, paragraflar ve listeler ile düzgün HTML yapısı kullan.`, postalCode, postalCode),
-
-		"pl": fmt.Sprintf(`Przeanalizuj ten obraz odpadów/śmieci i podaj instrukcje sortowania odpadów dla Niemiec, kod pocztowy %s.
-Zidentyfikuj, jaki to rodzaj odpadu i wyjaśnij, do którego pojemnika powinien trafić (Restmüll, Gelbe Tonne/Gelber Sack, Papiertonne, Biotonne, pojemnik na szkło, itp.).
-Uwzględnij specyficzne lokalne przepisy dla kodu pocztowego %s, jeśli są istotne.
-Podaj swoją odpowiedź TYLKO jako prawidłowy HTML bez dodatkowego tekstu, markdown lub wyjaśnień.
-Użyj odpowiedniej struktury HTML z nagłówkami, akapitami i listami tam, gdzie to właściwe.`, postalCode, postalCode),
-
-		"ar": fmt.Sprintf(`حلل صورة النفايات/القمامة هذه وقدم تعليمات فرز النفايات لألمانيا، الرمز البريدي %s.
-حدد نوع النفايات هذا واشرح في أي حاوية يجب وضعها (Restmüll، Gelbe Tonne/Gelber Sack، Papiertonne، Biotonne، حاوية الزجاج، إلخ).
-اشمل اللوائح المحلية المحددة للرمز البريدي %s إذا كانت ذات صلة.
-قدم إجابتك فقط كـ HTML صالح بدون أي نص إضافي أو markdown أو شروحات.
-استخدم هيكل HTML مناسب مع العناوين والفقرات والقوائم حسب الاقتضاء.`, postalCode, postalCode),
-	}
-
-	if prompt, exists := prompts[language]; exists {
-		return prompt
-	}
-	return prompts["en"] // fallback to English
+	return "", fmt.Errorf("no valid text response from Gemini")
 }

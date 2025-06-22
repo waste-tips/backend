@@ -1,18 +1,18 @@
 package handlers
 
 import (
-	"backend/internal/domain/models"
-	"backend/internal/domain/services"
-	"backend/internal/infrastructure/localization"
 	"context"
 	"encoding/json"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/domain/models"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/domain/services"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/infrastructure/localization"
 	"net/http"
 )
 
 // WasteSortingHandler handles HTTP requests for waste sorting
 type WasteSortingHandler struct {
-	service    *services.WasteSortingService
-	localizer  *localization.Localizer
+	service   *services.WasteSortingService
+	localizer *localization.Localizer
 }
 
 // NewWasteSortingHandler creates a new waste sorting handler
@@ -39,9 +39,8 @@ func (h *WasteSortingHandler) HandleRequest(ctx context.Context, r *http.Request
 	recaptchaCode := r.FormValue("recaptcha_code")
 	language := r.FormValue("language")
 
-	// Default to English if language not supported
 	if !h.localizer.IsLanguageSupported(language) {
-		language = "en"
+		language = "de" // Default to German
 	}
 
 	// Validate required fields

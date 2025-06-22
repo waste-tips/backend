@@ -1,9 +1,9 @@
 package domain
 
 import (
-	"backend/internal/infrastructure/container"
 	"context"
 	"fmt"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/infrastructure/container"
 	"net/http"
 	"strings"
 )
@@ -14,7 +14,7 @@ func Invoke(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
-	
+
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return

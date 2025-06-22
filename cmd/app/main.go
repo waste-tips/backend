@@ -1,8 +1,8 @@
 package main
 
 import (
-	"backend/internal/domain"
 	"context"
+	"github.com/DeryabinSergey/waste-tips-backend/internal/domain"
 	"github.com/GoogleCloudPlatform/functions-framework-go/funcframework"
 	"log"
 	"os"
